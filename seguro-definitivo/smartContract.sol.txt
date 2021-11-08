@@ -1,0 +1,146 @@
+// SPDX-License-Identifier: GPL-3.0
+//Autor: Adamor Barbosa de Barros Neto- UFAM(Universidade Federal do Amazonas)
+//Contrato Inteligente para a aplicação ALug
+pragma solidity >=0.6.0 <0.9.0;
+//função responsável pelo cálculo da apólice do segurado
+function calculaApolice(uint valor) pure returns(uint premio){
+    uint inteiro;
+    inteiro = valor;
+    uint metade;
+    metade = valor / 2;
+    uint total = inteiro+metade;
+    premio = total;
+}
+//função responsável pelo retorno do valor do sinistro do segurado
+function calculaSinistro(uint valor) pure returns(uint sinistro){
+    sinistro = valor;
+}
+//aqui se inicia o contrato de seguro.
+contract seguradora{
+
+    //Aqui uma estrutura eh montada para o armazenamento de algumas informações sobre o segurado.    
+    struct Segurado{
+        address carteira;           //carteira utilizada pelo cliente      
+        uint pagamentoPremio;       //contador de pagamentos efetuados pelo cliente
+        uint recebimentoSinistro;   //contador de sinistralidade do cliente
+        uint duracaoContrato;       //tempo de locação do contrato        
+        bool ehSegurado;            //booleano para identificar se essa pessoa eh segurado ou não
+        uint valorApolice;          //valor do seguro,calculado de acordo com o aluguel
+        uint valorSinistro;         //valor do sinistro = valor do aluguel
+        uint aluguel;               //valor do aluguel
+        uint parcelasApolice;       //parcelas em que o segurado deseja pagar a apolice
+    }
+    //Realizo o mapping de uma lista para segurados e para numero de cadastro.
+    mapping(uint => Segurado) listaSegurados;
+    mapping(address => uint) listaCadastro;
+    
+    uint montanteSeguro = 0;
+    uint montanteSeguradora = 0;
+    uint contSegurado = 0;
+    uint contTotal = 0;
+    
+    //Função onde é realizado o cadastro do usuário,aqui é onde se aloca uma estrutura para cada usuário.
+    function contratarSeguro(uint duracaoContrato,uint aluguel,uint parcelas) public returns (uint cadastro){//contratarSeguro
+  
+        cadastro = contSegurado;
+        Segurado memory novoSegurado = Segurado(msg.sender,0,0,duracaoContrato,true,calculaApolice(aluguel),calculaSinistro(aluguel),aluguel,parcelas);
+        
+        listaSegurados[contSegurado] = novoSegurado;
+        listaCadastro[msg.sender] = contSegurado;
+        contSegurado++;
+        contTotal++;
+        return(cadastro);
+    }
+    //Função que realiza o pagamento simbólico(podendo ser real também),das pracelas da apólice.
+    function pagarPremio() public payable{
+
+        uint cadastro = listaCadastro[msg.sender];
+        Segurado storage aux = listaSegurados[cadastro];
+        require(aux.ehSegurado == true && aux.carteira == msg.sender,"Instruso");
+        require(aux.pagamentoPremio < aux.parcelasApolice,"Ja efetuou todos os pagamentos");
+        
+        uint premioParcelado;
+        premioParcelado = aux.valorApolice / aux.parcelasApolice;
+        
+        uint seg1;
+        uint seg2;
+        seg1 = premioParcelado * 30;
+        seg2 = seg1 / 100;//taxa fixa mensal da seguradora
+        
+        uint premioParcelado1;
+        premioParcelado1 = premioParcelado - seg2;//valor que vai pro pool.
+        
+        montanteSeguro = montanteSeguro + premioParcelado1;
+        montanteSeguradora = montanteSeguradora + seg2;
+        aux.pagamentoPremio++;
+
+    }
+    //Função que transfere um pagamento de sinistro para o segurado selecionado e substitui o status de segurado no pool.
+    function receberSinistro(uint cadastro) public payable{
+
+        
+        Segurado storage aux = listaSegurados[cadastro];
+        require(aux.ehSegurado == true);
+        require(montanteSeguro >=aux.valorSinistro,"Sem dinheiro no montante");       
+        montanteSeguro = montanteSeguro - aux.valorSinistro;
+        aux.recebimentoSinistro++;
+        aux.ehSegurado = false;
+        contTotal--;
+    }
+    //Função que retorna todos os dados de um segurado selecionado.Visão da seguradora
+    function getDados(uint cadastro) public view returns (
+        address carteira, uint pagamentos, uint recebimentoSinistro, uint duracaoContrato,bool ehSegurado,uint valorApolice,uint ParcelaPremio,uint valorSinistro,uint aluguel,uint parcelasApolice
+    ) {
+
+        Segurado storage aux = listaSegurados[cadastro];
+        uint premioParcelado;
+        premioParcelado = aux.valorApolice / aux.parcelasApolice;
+        return (
+            aux.carteira,
+            aux.pagamentoPremio,
+            aux.recebimentoSinistro,
+            aux.duracaoContrato,
+            aux.ehSegurado,
+            aux.valorApolice,
+            premioParcelado,
+            aux.valorSinistro,
+            aux.aluguel,
+            aux.parcelasApolice
+        );
+    }
+    //Função que retorna alguns dados do segurado selecionado.Visão do segurado.
+    function getInformacao() public view returns (
+         address,uint,uint,uint,uint
+    ) {
+        uint cadastro = listaCadastro[msg.sender];
+        Segurado storage aux = listaSegurados[cadastro];
+        uint premioParcelado;
+        premioParcelado = aux.valorApolice / aux.parcelasApolice;
+        return (
+            aux.carteira,
+            aux.pagamentoPremio,
+            aux.valorApolice,
+            premioParcelado,
+            aux.parcelasApolice
+        );
+    }
+    //Função que retorna valores atuais do pool.
+    function getMontante() public view returns (
+        uint,uint,uint
+    ) {
+
+        
+        return (
+            montanteSeguradora,
+            montanteSeguro,
+            contTotal
+        );
+    }
+    //Função simbólica que retorna  um certo valor a partir do que se tem no pool.
+    function devolucao() public view returns(uint dinheiroDevolvido){
+
+        dinheiroDevolvido = montanteSeguro / contTotal;
+        
+        return(dinheiroDevolvido);
+    }
+}
